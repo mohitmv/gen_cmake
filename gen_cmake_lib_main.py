@@ -4,7 +4,6 @@ import collections
 
 from . import common
 from . import targets
-from . import utils
 from . import algorithms
 from .default_configs import getDefaultConfigs
 
@@ -17,7 +16,7 @@ def readBuildFile(filepath, directory=None, file_content=None):
     def typeFunc(target_type):
         def func(**args):
             args['type'] = target_type
-            output[args['name']] = utils.Object(args)
+            output[args['name']] = common.Object(args)
         return func
     func_map = {}
     for target_type in targets.TargetType:
@@ -318,14 +317,18 @@ def unparseCmakeDecl(cmake_decl, project_name="x"):
     output = "cmake_minimum_required(VERSION 3.1)\n"
     output += f"project({project_name})\n"
     for (name, args) in cmake_decl:
-        print(args)
         output += f"{name}({' '.join(args)})\n"
     return output
 
+def preprocessConfigs(configs):
+    top_dirs = set(os.path.relpath(x) for x in configs.TOP_DIRECTORY_LIST)
+    configs.IGNORED_PATHS |= set(i for i in os.listdir(".") if i not in top_dirs)
+    return configs
 
 def genCmake(source_directory, configs, targets_n_dirs, cmake_build_dir):
     assert source_directory == os.getcwd(), \
             "Current directory should be source_directory."
+    configs = preprocessConfigs(configs)
     targets_map = readTargets(targets_n_dirs, configs)
     cmake_file_gen = CMakeFileGen(configs, targets_map)
     os.makedirs(cmake_build_dir, exist_ok=True)

@@ -58,18 +58,3 @@ def depsCover(nodes, edge_func):
                 q.appendleft(i)
                 visited.add(i)
     return visited
-
-def depsCoverTopo(nodes, edge_func):
-    """
-    Given a graph with @nodes and @edge_func (node -> adjacent nodes), compute
-    the set of nodes reachable from @nodes.
-    """
-    q = collections.deque(nodes)
-    visited = set(nodes)
-    while len(q) > 0:
-        q_top = q.pop()
-        for i in edge_func(q_top):
-            if i not in visited:
-                q.appendleft(i)
-                visited.add(i)
-    return visited

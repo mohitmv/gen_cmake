@@ -1,4 +1,4 @@
-A simple and basic unit test of DepG
+A simple and basic unit test of gen_cmake
 
 Deps Graph: 
 

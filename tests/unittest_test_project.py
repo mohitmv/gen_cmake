@@ -88,21 +88,20 @@ def replaceTargetType(content, target_name, old_type, new_type):
     tmp0 = new_type.join(tmp[0].rsplit(old_type, 1))
     return tmp0 + f'"{target_name}"' + tmp[1]
 
+def deleteIfExists(path):
+    if os.path.exists(path):
+        shutil.rmtree(path)
+
 class TestProject1(unittest.TestCase):
     PROJECT_DIR = os.path.abspath(os.path.dirname(__file__) + "/test_project1")
 
-    def assertClean(self):
-        self.assertFalse(os.path.exists(f"{self.PROJECT_DIR}/build"))
-
     def clean(self):
-        if os.path.isdir(f"{self.PROJECT_DIR}/build"):
-            shutil.rmtree(f"{self.PROJECT_DIR}/build")
+        deleteIfExists(f"{self.PROJECT_DIR}/build")
 
     def setUp(self):
         self.clean()
 
     def tearDown(self):
-        self.clean()
         return
 
     def test_main(self):
@@ -115,45 +114,15 @@ class TestProject1(unittest.TestCase):
 
 class TestProject2(unittest.TestCase):
     PROJECT_DIR = os.path.abspath(os.path.dirname(__file__) + "/test_project2")
-    build_files = ["dir1/BUILD", "dir2/BUILD", "dir_main/BUILD", "common/BUILD"]
-
-    def assertClean(self):
-        for build_file in self.build_files:
-            self.assertFalse(os.path.exists(f"{self.PROJECT_DIR}/{build_file}"))
-        self.assertFalse(os.path.exists(f"{self.PROJECT_DIR}/build"))
-
-    def assertExists(self):
-        for build_file in self.build_files:
-            self.assertTrue(os.path.isfile(f"{self.PROJECT_DIR}/{build_file}"))
 
     def clean(self):
-        for build_file in self.build_files:
-            if os.path.isfile(f"{self.PROJECT_DIR}/{build_file}"):
-                os.remove(f"{self.PROJECT_DIR}/{build_file}")
-        if os.path.isdir(f"{self.PROJECT_DIR}/build"):
-            shutil.rmtree(f"{self.PROJECT_DIR}/build")
+        deleteIfExists(f"{self.PROJECT_DIR}/build")
 
     def setUp(self):
         self.clean()
-        return
-
-    def tearDown(self):
-        self.clean()
-        return
 
     def test_main(self):
-        self.assertClean()
-        self.assertTrue(os.system(f"{self.PROJECT_DIR}/tools/depg_main.py .") == 0)
-        self.assertExists()
-        content1 = readFile(f"{self.PROJECT_DIR}/dir_main/BUILD").replace("CppSource", "CppExecutable")
-        content2 = readFile(f"{self.PROJECT_DIR}/dir2/BUILD")
-        content2 = replaceTargetType(content2, "shared_lib", "CppSource", "CppSharedLib")
-        writeFile(f"{self.PROJECT_DIR}/dir_main/BUILD", content1)
-        writeFile(f"{self.PROJECT_DIR}/dir2/BUILD", content2)
-        self.assertTrue(os.system(f"{self.PROJECT_DIR}/tools/depg_main.py .") == 0)
-        self.assertEqual(readFile(f"{self.PROJECT_DIR}/dir_main/BUILD"), content1)
-        self.assertEqual(readFile(f"{self.PROJECT_DIR}/dir2/BUILD"), content2)
-        self.assertTrue(os.system(f"{self.PROJECT_DIR}/tools/depg_main.py . --gen_cmake") == 0)
+        self.assertTrue(os.system(f"{self.PROJECT_DIR}/tools/gen_cmake_main.py --out build") == 0)
         self.assertTrue(os.path.isfile(f"{self.PROJECT_DIR}/build/CMakeLists.txt"))
         os.chdir(f"{self.PROJECT_DIR}/build")
         self.assertTrue(os.system("cmake . && make") == 0)

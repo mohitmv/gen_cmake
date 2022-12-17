@@ -15,6 +15,8 @@
 
 4. [P2] Test out the content in topmost BUILD file (example `gcab.so` decl at root level will be there)
 
+5. Rename cxx_flags to cc_flags (top level configs)
+
 
 ## Dones
 

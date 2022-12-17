@@ -5,6 +5,18 @@
 
 import os
 import hashlib
+import collections
+
+class Object(dict):
+    """
+    Object extends the inbuilt dictionary and exposes the keys as class members.
+    p = Object({"key1": 11, "key2": 22})
+    key1 of p can be accessed by p.key1 as well as p["key1"].
+    """
+
+    def __init__(self, *initial_value, **kwargs):
+        self.__dict__ = self
+        dict.__init__(self, *initial_value, **kwargs)
 
 def toRelativePaths(paths):
     for path in paths:
