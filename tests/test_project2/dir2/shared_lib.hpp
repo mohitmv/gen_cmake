@@ -1,0 +1,1 @@
+int dir2_shared_lib();
