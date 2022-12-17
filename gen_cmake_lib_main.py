@@ -36,6 +36,32 @@ def readBuildFile(filepath, directory=None, file_content=None):
     return output
 
 
+def expandTargets(target_names_or_dirs, configs, excluded_input_targets=()):
+    """
+    Given a list of directories or target names, expand the list by
+    translating directories to list of targets in that directory, considering
+    all targets recursively in that directory.
+    """
+    output = utils.OrderedSet()
+    common.assertRelativePaths(configs.IGNORED_PATHS)
+    excluded = set(common.toRelativePaths(excluded_input_targets))
+    excluded |= getAllForbiddenPaths(configs)
+    for input_target in target_names_or_dirs:
+        input_target = os.path.relpath(input_target)
+        if os.path.isdir(input_target):
+            files = listDirectoryRecursive(input_target, excluded,
+                                           configs.IGNORED_PATHS)
+            for file in files:
+                target = fileToTarget(file, self.configs)
+                if target is not None:
+                    output.add(target)
+        else:
+            target = input_target.replace(":", "/")
+            if (target not in excluded) and (input_target not in excluded):
+                output.add(target)
+    output = list(output)
+    return output
+
 def readBuildFileAndFullTargetPaths(build_file):
     output = collections.OrderedDict()
     directory = os.path.dirname(build_file)
