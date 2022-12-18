@@ -1,8 +1,9 @@
 ## TODOs
 
-[P0] Figure out how i will handle copy-target at different path. May be support also_install_at = ["{args.build_dir}/bin", "{args.gcab_install_dir}"]
+11. [P0] Figure out how i will handle copy-target at different path. May be support also_install_at = ["{args.build_dir}/bin", "{args.gcab_install_dir}"]
 
-[P0] Figure out how to handle custom target produced by scripts and how to make other depend on them. Example version.hpp is dependent on a custom script to run.
+12. [P1] Add support for CustomTarget with options like:
+                output_files, input_files, private_deps, always_rebuild=False|True
 
 9. [P1] Add support and unit tests for target level link flags.
 
@@ -10,7 +11,7 @@
 
 2. [P2] Add support for passing cmake topmost stuff (version and project name) via config params.
 
-4. [P2] Test out the content in topmost BUILD file (example `gcab.so` decl at root level will be there)
+3. [P2] Add support for proto_library,
 
 5. Rename cxx_flags to cc_flags (top level configs)
 
@@ -29,4 +30,6 @@
 11. [Done] [P1] Add a unit tests around the usage of third_party BUILD file and targets used in main source.
 
 10. [Done] [P2] Add support and unit tests for target level include_paths.
+
+10. [Done][P0] Figure out how to handle custom target produced by scripts and how to make other depend on them. Example version.hpp is dependent on a custom script to run.
 
