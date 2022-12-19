@@ -18,9 +18,7 @@ import gen_cmake.gen_cmake_lib_main as gen_cmake_lib_main
 
 def getConfigs():
     configs = gen_cmake_lib_main.getDefaultConfigs()
-    configs.TOP_DIRECTORY_LIST = ["dir1", "dir2", "dir_main", "common"]
-    configs.INCLUDE_PATHS = [ ".", "common" ]
-    configs.CC_FLAGS = ["-fPIC"]
+    configs.TOP_DIRECTORY_LIST = ["dir1"]
     return configs
 
 def getArgs():

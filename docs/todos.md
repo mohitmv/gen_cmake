@@ -5,6 +5,8 @@
 12. [P1] Add support for CustomTarget with options like:
                 output_files, input_files, private_deps, always_rebuild=False|True
 
+13. [P0] Add support for resolving {args}, {configs} and {params} in BUILD files... in any of the string, using python's f-string.
+
 9. [P1] Add support and unit tests for target level link flags.
 
 1. [P2] Add support for passing the BUILD file topmost comment via config params.
@@ -13,7 +15,7 @@
 
 3. [P2] Add support for proto_library,
 
-5. Rename cxx_flags to cc_flags (top level configs)
+5. [P2] Rename cxx_flags to cc_flags (top level configs)
 
 
 ## Dones

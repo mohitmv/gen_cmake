@@ -12,9 +12,8 @@ class TargetType(IntEnum):
     CPP_TEST = 3
     CPP_SHARED_LIB = 4
     CPP_STATIC_LIB = 5
-    NOP_TARGET = 7
-    PROTO_LIBRARY = 8
-    GRPC_LIBRARY = 9
-    CUSTOM = 10
+    PROTO_LIBRARY = 6
+    GRPC_LIBRARY = 7
+    CUSTOM_TARGET = 8
     def funcName(self):
         return self.name.title().replace("_", "")

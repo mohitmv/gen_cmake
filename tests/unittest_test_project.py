@@ -71,6 +71,18 @@ END dir1_f2
 END dir1_main
 """
 
+PROJECT5_MAIN1_OUTPUT_START = """\
+START dir1_main
+dir1_f1
+dir1_f2 : version = """
+
+PROJECT5_MAIN1_OUTPUT_END = """\
+START dir1_f2
+dir1_f1
+END dir1_f2
+END dir1_main
+"""
+
 
 def cmdOutput(cmd):
   return subprocess.check_output(cmd, shell=True).decode("utf-8")
@@ -159,6 +171,35 @@ class TestProject4(unittest.TestCase):
         os.chdir(f"{self.PROJECT_DIR}/build")
         self.assertTrue(os.system("cmake . && make") == 0)
         self.assertEqual(cmdOutput("./dir1_main1"), PROJECT4_MAIN1_OUTPUT)
+
+
+class TestProject5(unittest.TestCase):
+    PROJECT_DIR = os.path.abspath(os.path.dirname(__file__) + "/test_project5")
+
+    def setUp(self):
+        deleteIfExists(f"{self.PROJECT_DIR}/build")
+        gen_version_content = ("import time\n"
+            "version = int(1000000000 * time.time())\n"
+            f"with open('{self.PROJECT_DIR}/dir1/version.hpp', 'w') as fd:\n"
+            "  fd.write(f'#define VERSION {version}L\\n')\n")
+        os.makedirs("/tmp/test_project5/", exist_ok=True)
+        writeFile("/tmp/test_project5/gen_version.py", gen_version_content)
+
+    def test_main(self):
+        self.assertTrue(os.system(f"{self.PROJECT_DIR}/tools/gen_cmake_main.py --out build") == 0)
+        self.assertTrue(os.path.isfile(f"{self.PROJECT_DIR}/build/CMakeLists.txt"))
+        os.chdir(f"{self.PROJECT_DIR}/build")
+        self.assertTrue(os.system("cmake . && make") == 0)
+        result = cmdOutput("./dir1_main1")
+        self.assertTrue(result.startswith(PROJECT5_MAIN1_OUTPUT_START))
+        self.assertTrue(result.endswith(PROJECT5_MAIN1_OUTPUT_END))
+        result2 = cmdOutput("./dir1_main1")
+        self.assertEqual(result, result2)
+        self.assertTrue(os.system("cmake . && make") == 0)
+        result3 = cmdOutput("./dir1_main1")
+        self.assertTrue(result3.startswith(PROJECT5_MAIN1_OUTPUT_START))
+        self.assertTrue(result3.endswith(PROJECT5_MAIN1_OUTPUT_END))
+        self.assertTrue(result2 != result3)
 
 
 if __name__ == '__main__':

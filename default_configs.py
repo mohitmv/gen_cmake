@@ -14,7 +14,7 @@ def getDefaultConfigs():
     # explicitly chosen.
     configs.IGNORED_PATHS = set(["experimental"])
 
-    configs.CXX_FLAGS = []
+    configs.CC_FLAGS = []
 
     configs.LINK_FLAGS = []
 

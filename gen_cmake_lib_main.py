@@ -202,39 +202,49 @@ def mergeListOfList(list_of_list):
     return output
 
 
-CPP_EXECUTABLE_DEPS_COVER_GO_IN = set([TargetType.CPP_SOURCE, TargetType.NOP_TARGET, TargetType.PROTO_LIBRARY, TargetType.GRPC_LIBRARY, TargetType.CPP_SHARED_LIB, TargetType.CPP_STATIC_LIB])
+# If any of these targets are founds in deps of a C++ target, we must consider them.
+CPP_EXECUTABLE_DEPS_COVER_GO_IN = set([
+    TargetType.CPP_SOURCE, TargetType.PROTO_LIBRARY, TargetType.GRPC_LIBRARY,
+    TargetType.CPP_SHARED_LIB, TargetType.CPP_STATIC_LIB,
+    TargetType.CUSTOM_TARGET])
 
-def combineFields(targets_map, field):
+
+def combineFields(target_deps_map, target, field):
     output = []
-    for tname, target in targets_map.items():
-        output.extend(target.get(field, []))
+    for tname, dep_target in target_deps_map.items():
+        output.extend(dep_target.get(field, []))
+    output.extend(target.get(field, []))
     return output
+
 
 def makeCMakeValuesString(values):
     values_str = ' '.join(values)
     return f'"{values_str}"'
 
 
+# Implementation overvoew at docs/impl.md
 class CMakeFileGen:
     def __init__(self, configs, targets_map):
         self.configs = configs
         self.targets_map = targets_map
-        self.cmake_i_deps_map = {}
+        self.cmake_exports = {}
         self.cmake_decl = []
 
     def makeCMakeDecl(self):
-        self.makeCMakeMetaDecl()
-        self.makeCMakeTargetDecl()
+        self.metaDeclaration()
+        self.targetsDeclaration()
         return self.cmake_decl
 
-    def makeCMakeMetaDecl(self):
+    def metaDeclaration(self):
+        """Declare top level stuff like CXX flags etc"""
         if self.configs.INCLUDE_PATHS:
             self.cmake_decl.append(("include_directories", (self.configs.INCLUDE_PATHS)))
-        if self.configs.CXX_FLAGS:
-            joined = ' '.join(self.configs.CXX_FLAGS)
-            self.cmake_decl.append(("set", ["CMAKE_CXX_FLAGS", makeCMakeValuesString(self.configs.CXX_FLAGS)]))
+        if self.configs.CC_FLAGS:
+            joined = makeCMakeValuesString(self.configs.CC_FLAGS)
+            self.cmake_decl.append(("set", ["CMAKE_CXX_FLAGS", joined]))
 
-    def makeCMakeTargetDecl(self):
+    def targetsDeclaration(self):
+        """Declare targets."""
         for _, target in self.targets_map.items():
             if target.type == TargetType.CPP_SOURCE:
                 self.handleCppSource(target)
@@ -244,11 +254,34 @@ class CMakeFileGen:
                 self.handleCppExecutableOrSharedLib(target, is_shared_lib=True)
             elif target.type in [TargetType.PROTO_LIBRARY, TargetType.GRPC_LIBRARY]:
                 self.handleProtoLibrary(target)
+            elif target.type == TargetType.CUSTOM_TARGET:
+                self.handleCustomTarget(target)
             else:
                 assert False, target
 
+
     def handleProtoLibrary(self, target):
-        self.cmake_i_deps_map[target.name] = []
+        self.cmake_exports[target.name] = dict(
+            generated_proto_cc_files=[], cpp_targets= [])
+
+
+    def handleCustomTarget(self, target):
+        cmake_tname = target.name.replace("/", "_")
+        cmake_export = common.Object(cmake_tname=cmake_tname)
+        if target.always_rebuild or "output_files" not in target:
+            elms = [cmake_tname]
+            if "command" in target:
+                elms.append(target.command)
+            self.cmake_decl.append(("add_custom_target", elms))
+        else:
+            elms = ["OUTPUT"]
+            elms.extend(target.output_files)
+            if "command" in target:
+                elms.extend(["COMMAND", target.command])
+            self.cmake_decl.append(("add_custom_command", elms))
+            elms2 = [cmake_tname, "DEPENDS"] + target.output_files
+            self.cmake_decl.append(("add_custom_target", elms2))
+        self.cmake_exports[target.name] = cmake_export
 
     def addCompileOptions(self, cmake_tname, cc_flags):
         if cc_flags:
@@ -262,52 +295,86 @@ class CMakeFileGen:
                     [cmake_tname, "PRIVATE"] + include_paths))
 
     def handleCppSource(self, target):
-        cmake_i_deps = []
-        if "srcs" in target:
+        cpp_targets = []
+        files = target.get("srcs", []) + target.get("hdrs", [])
+        if len(files) > 0:
             cmake_tname = target.name.replace("/", "_")
             elms = [cmake_tname, "OBJECT"]
-            elms.extend(target.srcs)
-            public_deps_map = self.publicDepsCoverTargetMap(target)
-            cc_flags = combineFields(public_deps_map, "public_cc_flags") + target.get("private_cc_flags", [])
-            include_paths = combineFields(public_deps_map, "public_include_paths") + target.get("private_include_paths", [])
+            elms.extend(files)
             self.cmake_decl.append(("add_library", elms))
-            self.addCompileOptions(cmake_tname, cc_flags)
-            self.addIncludePaths(cmake_tname, include_paths)
-            cmake_i_deps.append(cmake_tname)
+            self.handleCppSourceDeps(target, cmake_tname)
+            cpp_targets.append(cmake_tname)
         if "library" in target:
             if type(target.library) is str:
-                cmake_i_deps.append(target.library)
+                cpp_targets.append(target.library)
             elif type(target.library) is list:
-                cmake_i_deps.extend(target.library)
+                cpp_targets.extend(target.library)
             else:
                 assert False
-        self.cmake_i_deps_map[target.name] = cmake_i_deps
+        self.cmake_exports[target.name] = dict(cpp_targets=cpp_targets)
 
     def handleCppExecutableOrSharedLib(self, target, is_shared_lib):
         cmake_tname = target["name"].replace("/", "_")
-        public_deps_map = self.publicDepsCoverTargetMap(target)
-        deps_map = self.depsCoverTargetMap(target)
-        link_flags = combineFields(deps_map, "link_flags")
-        cc_flags = combineFields(public_deps_map, "public_cc_flags") + target.get("private_cc_flags", [])
-        include_paths = combineFields(public_deps_map, "public_include_paths") + target.get("private_include_paths", [])
         elms1 = [cmake_tname] + (["SHARED"] if is_shared_lib else [])
-        elms1.extend(target["srcs"])
+        elms1.extend(target.get("srcs", []) + target.get("hdrs", []))
         self.cmake_decl.append(("add_library" if is_shared_lib else "add_executable", elms1))
+        self.handleCppSourceDeps(target, cmake_tname)
+        self.handleLinkDeps(target, cmake_tname)
+        if is_shared_lib:
+            cmake_export = dict(cpp_targets=[cmake_tname])
+        else:
+            cmake_export = dict(cmake_tname=cmake_tname)
+        self.cmake_exports[target.name] = cmake_export
+
+
+    def handleCppSourceDeps(self, target, cmake_tname):
+        public_deps_map = self.publicDepsCoverTargetMap(target)
+        cc_flags = combineFields(public_deps_map, target, "public_cc_flags") + target.get("private_cc_flags", [])
+        include_paths = combineFields(public_deps_map, target, "public_include_paths") + target.get("private_include_paths", [])
         self.addCompileOptions(cmake_tname, cc_flags)
-        print("include_paths = ", include_paths, target.name)
         self.addIncludePaths(cmake_tname, include_paths)
-        elms2 = [cmake_tname]
-        [elms2.extend(self.cmake_i_deps_map[tname]) for tname, x in deps_map.items() if tname != target.name]
-        elms2.extend(link_flags)
-        self.cmake_i_deps_map[target.name] = [cmake_tname]
-        if len(elms2) > 1:
-            self.cmake_decl.append(("target_link_libraries", elms2))
+        dep_custom_targets = self.combineExportedFields(
+                public_deps_map, "cmake_tname", TargetType.CUSTOM_TARGET)
+        output_files = common.JoinList(self.combineExportedFields(
+            public_deps_map, "output_files", TargetType.CUSTOM_TARGET))
+        self.addCMakeDeps(cmake_tname, dep_custom_targets + output_files)
+
+
+    def combineExportedFields(self, deps_map, field_name, target_type):
+        output = []
+        for tname, target in deps_map.items():
+            if target.type != target_type:
+                continue
+            cmake_export = self.cmake_exports[tname]
+            if field_name not in cmake_export:
+                continue
+            output.append(cmake_export[field_name])
+        return output
+
+
+    def handleLinkDeps(self, target, cmake_tname):
+        deps_map = self.depsCoverTargetMap(target)
+        elms = [cmake_tname]
+        for tname, x in deps_map.items():
+            cmake_export = self.cmake_exports[tname]
+            elms.extend(cmake_export.get("cpp_targets", []))
+        link_flags = combineFields(deps_map, target, "link_flags")
+        elms.extend(link_flags)
+        if len(elms) > 1:
+            self.cmake_decl.append(("target_link_libraries", elms))
+        cmake_deps = self.combineExportedFields(
+            deps_map, "cmake_tname", TargetType.CPP_EXECUTABLE)
+        self.addCMakeDeps(cmake_tname, cmake_deps)
+
+    def addCMakeDeps(self, cmake_tname, deps):
+        if len(deps) > 0:
+            self.cmake_decl.append(("add_dependencies", [cmake_tname] + deps))
+
 
     def depsCoverTargetMap(self, target):
         target_names = algorithms.topologicalSortedDepsCover(
                 self.filteredAllDeps(target),
                 self.cppDepsCoverEdgeFunc)
-        target_names.append(target.name)
         return collections.OrderedDict((x, self.targets_map[x]) for x in target_names)
 
     def publicDepsCoverTargetMap(self, target):
@@ -315,7 +382,6 @@ class CMakeFileGen:
         target_names = algorithms.topologicalSortedDepsCover(
                 self.filteredAllDeps(target),
                 self.cppPublicDepsCoverEdgeFunc)
-        target_names.append(target.name)
         return collections.OrderedDict((x, self.targets_map[x]) for x in target_names)
 
     def filterDepsInCppDepsCoverPath(self, deps):

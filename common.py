@@ -65,3 +65,10 @@ def getFileCheckSum(file):
         for chunk in iter(lambda: f.read(4096), b""):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
+
+def JoinList(ll):
+    output = []
+    for l in ll:
+        output.extend(l)
+    return output
+
