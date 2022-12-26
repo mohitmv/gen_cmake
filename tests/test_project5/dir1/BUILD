@@ -21,6 +21,22 @@ CustomTarget(
     command = "python3 /tmp/test_project5/gen_version.py")
 
 CppExecutable(
+    name = "main2",
+    srcs = [ "main2.cpp" ],
+    private_deps = [ ":generated_source" ])
+
+CppSource(
+    name = "generated_source",
+    srcs = [ "generated_source.cpp" ],
+    private_deps = [":gen_source"])
+
+CustomTarget(
+    name = "gen_source",
+    output_files = [ "generated_source.cpp" ],
+    input_files = [ "source_template.txt" ],
+    command = "python3 /tmp/test_project5/gen_source.py")
+
+CppExecutable(
     name = "main1",
     srcs = [ "main1.cpp" ],
     private_deps = [ ":f1",

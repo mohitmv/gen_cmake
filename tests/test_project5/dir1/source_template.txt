@@ -1,0 +1,5 @@
+
+int source_template() {
+  return PARAM_OUTPUT + 18;
+}
+

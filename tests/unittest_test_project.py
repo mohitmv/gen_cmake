@@ -87,6 +87,9 @@ END dir1_main
 def cmdOutput(cmd):
   return subprocess.check_output(cmd, shell=True).decode("utf-8")
 
+def readFile(fn):
+  with open(fn) as fd:
+    return fd.read()
 
 def writeFile(fn, content):
   with open(fn, 'w') as fd:
@@ -173,6 +176,15 @@ class TestProject4(unittest.TestCase):
         self.assertEqual(cmdOutput("./dir1_main1"), PROJECT4_MAIN1_OUTPUT)
 
 
+
+directory = "/home/mohit/projects/gen_cmake/tests/test_project5/dir1"
+
+TestProject5_GEN_SOURCE = """
+with open(f"{directory}/generated_source.cpp", 'w') as fd:
+  content = open(f"{directory}/source_template.txt").read()
+  fd.write(content.replace("PARAM_OUTPUT", "25"))
+"""
+
 class TestProject5(unittest.TestCase):
     PROJECT_DIR = os.path.abspath(os.path.dirname(__file__) + "/test_project5")
 
@@ -184,6 +196,15 @@ class TestProject5(unittest.TestCase):
             "  fd.write(f'#define VERSION {version}L\\n')\n")
         os.makedirs("/tmp/test_project5/", exist_ok=True)
         writeFile("/tmp/test_project5/gen_version.py", gen_version_content)
+        self.gen_source_code = (f'directory = "{self.PROJECT_DIR}/dir1"'
+             + TestProject5_GEN_SOURCE)
+        writeFile("/tmp/test_project5/gen_source.py", self.gen_source_code)
+        self.source_txt_file = f"{self.PROJECT_DIR}/dir1/source_template.txt"
+        self.original_source_template = readFile(self.source_txt_file)
+
+    def tearDown(self):
+        writeFile(self.source_txt_file, self.original_source_template)
+
 
     def test_main(self):
         self.assertTrue(os.system(f"{self.PROJECT_DIR}/tools/gen_cmake_main.py --out build") == 0)
@@ -200,6 +221,22 @@ class TestProject5(unittest.TestCase):
         self.assertTrue(result3.startswith(PROJECT5_MAIN1_OUTPUT_START))
         self.assertTrue(result3.endswith(PROJECT5_MAIN1_OUTPUT_END))
         self.assertTrue(result2 != result3)
+        result3 = cmdOutput("./dir1_main2")
+        self.assertEqual(result3, "source_template() = 43\n")
+        dir1_main2_time1 = os.path.getctime("dir1_main2")
+        self.assertTrue(os.system("cmake . && make") == 0)
+        dir1_main2_time2 = os.path.getctime("dir1_main2")
+        self.assertEqual(dir1_main2_time1, dir1_main2_time2)
+        result3 = cmdOutput("./dir1_main2")
+        self.assertEqual(result3, "source_template() = 43\n")
+        writeFile(self.source_txt_file,
+                self.original_source_template.replace("18", "17"))
+        self.assertTrue(os.system("cmake . && make") == 0)
+        result3 = cmdOutput("./dir1_main2")
+        self.assertEqual(result3, "source_template() = 42\n")
+        self.assertTrue(os.system("cmake . && make") == 0)
+        result3 = cmdOutput("./dir1_main2")
+        self.assertEqual(result3, "source_template() = 42\n")
 
 
 if __name__ == '__main__':

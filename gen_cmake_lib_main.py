@@ -71,7 +71,7 @@ def readBuildFileAndFullTargetPaths(build_file):
             if field not in target:
                 continue
             target[field] = f"{directory}/{target[field]}"
-        for field in ["srcs", "hdrs"]:
+        for field in ["srcs", "hdrs", "output_files", "input_files"]:
             if field not in target:
                 continue
             target[field] = [f"{directory}/{x}" for x in target[field]]
@@ -268,7 +268,8 @@ class CMakeFileGen:
     def handleCustomTarget(self, target):
         cmake_tname = target.name.replace("/", "_")
         cmake_export = common.Object(cmake_tname=cmake_tname)
-        if target.always_rebuild or "output_files" not in target:
+        always_rebuild = target.get("always_rebuild", False)
+        if always_rebuild or "output_files" not in target:
             elms = [cmake_tname]
             if "command" in target:
                 elms.append(target.command)
@@ -278,6 +279,8 @@ class CMakeFileGen:
             elms.extend(target.output_files)
             if "command" in target:
                 elms.extend(["COMMAND", target.command])
+            if "input_files" in target:
+                elms.extend(["DEPENDS"] + target.input_files)
             self.cmake_decl.append(("add_custom_command", elms))
             elms2 = [cmake_tname, "DEPENDS"] + target.output_files
             self.cmake_decl.append(("add_custom_target", elms2))
