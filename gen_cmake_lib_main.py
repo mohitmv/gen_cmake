@@ -9,32 +9,65 @@ from .default_configs import getDefaultConfigs
 
 from .targets import TargetType
 
-def readBuildFile(filepath, directory=None, file_content=None):
-    directory = directory or os.path.dirname(filepath) or "."
-    file_content  = file_content or common.readFile(filepath)
-    output = collections.OrderedDict()
+def parseBuildFile(file_content):
+    output = []
     def typeFunc(target_type):
         def func(**args):
             args['type'] = target_type
-            output[args['name']] = common.Object(args)
+            output.append(args)
         return func
     func_map = {}
     for target_type in targets.TargetType:
         func_map[target_type.funcName()] = typeFunc(target_type)
     locals().update(func_map)
     exec(file_content)
+    return output
+
+def resolveVariablesInString(given_string, args, params, configs):
+    if '{' not in given_string:
+        return given_string
+    return eval('f' + json.dumps(given_string))
+
+
+def resolveVariables(obj, args, params, configs):
+    if type(obj) is list:
+        return [resolveVariablesInString(x, args, params, configs) for x in obj]
+    if type(obj) is dict:
+        return dict((k, resolveVariablesInString(v, args, params, configs))
+                                for k,v in obj.items())
+    return obj
+
+
+def preprocessParsedBuildFile(parsed_build_file, directory, args, params, configs):
+    """
+    1. Resolve the variables used in strings in BUILD file eg: {args.param1}
+    2. Expand file local target names to full name (eg - ":abc")
+    """
+    parsed_build_file = resolveVariables(parsed_build_file, args, params, configs)
     def expandDep(dep):
         if dep.startswith(":"):
             return directory + "/" + dep[1:]
         else:
             return dep.replace(":", "/")
-    for tname, target in output.items():
+    output = collections.OrderedDict()
+    for target in parsed_build_file:
         for field in ['public_deps', 'private_deps']:
             if field not in target:
                 continue
             target[field] = [expandDep(dep) for dep in target[field]]
+        target = common.Object(target)
+        output[target.name] = target
     return output
 
+
+def loadBuildFile(filepath, args, params, configs):
+    """
+    Read a BuildFile, parse it and preprocess it
+    """
+    directory = os.path.dirname(filepath) or "."
+    file_content  = common.readFile(filepath)
+    return preprocessParsedBuildFile(
+        parseBuildFile(file_content), directory, args, params, configs)
 
 def expandTargets(target_names_or_dirs, configs, excluded_input_targets=()):
     """
@@ -62,10 +95,10 @@ def expandTargets(target_names_or_dirs, configs, excluded_input_targets=()):
     output = list(output)
     return output
 
-def readBuildFileAndFullTargetPaths(build_file):
+def readBuildFileAndFullTargetPaths(build_file, args, params, configs):
     output = collections.OrderedDict()
     directory = os.path.dirname(build_file)
-    targets = readBuildFile(build_file)
+    targets = loadBuildFile(build_file, args, params, configs)
     for tname, target in targets.items():
         for field in ["name", "src"]:
             if field not in target:
@@ -153,11 +186,12 @@ def listBuildFilesRecursive(directory, forbidden_paths, ignored_paths):
     return output
 
 
-def readTargets(target_names_or_dirs, configs):
+def readTargets(target_names_or_dirs, args, params, configs):
     build_files_map = {}
     def readBuildFileCached(build_file):
         if build_file not in build_files_map:
-            build_files_map[build_file] = readBuildFileAndFullTargetPaths(build_file)
+            build_files_map[build_file] = readBuildFileAndFullTargetPaths(
+                build_file, args, params, configs)
         return build_files_map[build_file]
     target_names = set()
     common.assertRelativePaths(configs.IGNORED_PATHS)
@@ -420,11 +454,14 @@ def preprocessConfigs(configs):
     configs.IGNORED_PATHS |= set(i for i in os.listdir(".") if i not in top_dirs)
     return configs
 
-def genCmake(source_directory, configs, targets_n_dirs, cmake_build_dir):
+def genCmake(source_directory, configs, targets_n_dirs, cmake_build_dir,
+             args=None, params=None):
     assert source_directory == os.getcwd(), \
             "Current directory should be source_directory."
     configs = preprocessConfigs(configs)
-    targets_map = readTargets(targets_n_dirs, configs)
+    args = args or {}
+    params = params or {}
+    targets_map = readTargets(targets_n_dirs, args, params, configs)
     cmake_file_gen = CMakeFileGen(configs, targets_map)
     os.makedirs(cmake_build_dir, exist_ok=True)
     cmake_decl = cmake_file_gen.makeCMakeDecl()
